@@ -14,7 +14,7 @@ FW = {c: chr(ord(c) + 0xFEE0) for c in '!?,.:;()/%+-=&#*0123456789ABCDEFGHIJKLMN
 FW.update({'_': '＿', '~': '～', '"': '”', "'": '’', '-': '－'})
 SUBST = {'…': '…', '·': '・', '‘': '‘', '’': '’', '“': '“', '”': '”', '～': '～', '—': '―', '–': '－',
          '♪': '♪', '☆': '☆', '★': '★', '♥': '♥', '「': '「', '」': '」', '『': '『', '』': '』'}
-TOK = re.compile(r'\{(PX|PM|PN)\}|\n|.', re.S)
+TOK = re.compile(r'\{(PX|PM|PN)\}|(%[-0-9.]*[sdxuc])|\n|.', re.S)
 
 def enc(s, space=b'\x81\x40', ascii_ok=False):
     """encode one text run. '\\n' -> 'r'; {PX}{PM}{PN} -> px/pm/pn.
@@ -24,6 +24,7 @@ def enc(s, space=b'\x81\x40', ascii_ok=False):
         t = m.group()
         if m.group(1):
             out += m.group(1).lower().encode(); continue
+        if m.group(2): out += t.encode(); continue  # printf 서식은 ASCII 유지
         if t == '\n': out += b'r'; continue
         if t == ' ': out += space; continue
         if ascii_ok and ' ' < t <= '~':

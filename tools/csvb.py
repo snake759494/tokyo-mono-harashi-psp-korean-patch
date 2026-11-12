@@ -45,6 +45,7 @@ class CSVB:
                 except (UnicodeDecodeError, ValueError):
                     continue
                 s.strcols.append(c)
+        s.allcols = list(s.strcols)
 
     def get(s, v):
         o = v - s.pool0
@@ -65,15 +66,41 @@ class CSVB:
         rows = bytearray(b[s.d0:s.d0 + s.pool0])
         pool = bytearray(s.pool); seen = {}
         while len(pool) % 4: pool += b'\0'
+        # 1) decide replacements; count how many pointers still use each original string
+        keep = {}; todo = []
         for r in range(s.nr):
-            for c in s.strcols:
+            for c in s.allcols:
                 v = struct.unpack_from('<I', rows, r * s.rs + c)[0]
                 if v in (0xFFFFFFFF, 0): continue
-                ns = tr(s.get(v))
-                if ns is None or ns == s.get(v): continue
-                if ns not in seen:
-                    seen[ns] = s.pool0 + len(pool); pool += ns + b'\0'
-                struct.pack_into('<I', rows, r * s.rs + c, seen[ns])
+                ns = tr(s.get(v)) if c in s.strcols else None
+                if ns is None or ns == s.get(v):
+                    keep[v] = True
+                else:
+                    keep.setdefault(v, False); todo.append((r, c, ns))
+        # 2) strings nobody uses any more become free holes (memory: the table is
+        #    loaded whole, so growing it starves the heap -> movie player fails)
+        holes = []
+        kept = sorted(v for v, k in keep.items() if k)
+        import bisect
+        for v, k in keep.items():
+            if not k:
+                o = v - s.pool0; e = s.pool.index(b'\0', o) + 1
+                i = bisect.bisect_left(kept, v)
+                if i < len(kept) and kept[i] < s.pool0 + e: continue  # shared tail
+                if any(s.pool0 + o < w < s.pool0 + e for w in keep if w != v): continue
+                pool[o:e] = b'\0' * (e - o); holes.append([o, e])
+        holes.sort()
+        def place(nb):
+            n = len(nb) + 1
+            best = None
+            for h in holes:
+                if h[1] - h[0] >= n and (best is None or h[1] - h[0] < best[1] - best[0]): best = h
+            if best is not None:
+                o = best[0]; pool[o:o + len(nb)] = nb; best[0] += n; return o
+            o = len(pool); pool.extend(nb + b'\0'); return o
+        for r, c, ns in todo:
+            if ns not in seen: seen[ns] = s.pool0 + place(ns)
+            struct.pack_into('<I', rows, r * s.rs + c, seen[ns])
         while len(pool) % 4: pool += b'\0'
         tbl = b'TblB' + struct.pack('<I', 8 + len(rows) + len(pool)) + rows + pool
         out = b[:s.tp] + tbl + b[s.tp + s.tsz:]

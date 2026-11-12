@@ -68,7 +68,29 @@ def build(name, src, cmap):
     i = idx[SPACE]
     e = list(struct.unpack_from('<HBBH', b, 0x1c + 6 * i))
     struct.pack_into('<HBBH', b, 0x1c + 6 * i, e[0], SPACE_W[name], SPACE_H.get(name, e[2]), e[3])
+    if name in TRIM:
+        b = trim(k, max(cmap.values()))
     return bytes(b)
+
+# 글꼴은 표·대본과 같은 고정 영역에 올라간다. 한국어 표가 커진 만큼 뒤쪽 여유가 줄어
+# 시험 후 오프닝 동영상 메모리 확보가 실패했다. 한글 슬롯 뒤의 안 쓰는 한자 글리프를
+# 잘라 그 영역을 원본보다 작게 만든다. (항목은 코드순 정렬, 앞쪽 색인은 그대로)
+TRIM = {'sysfont18'}
+
+def trim(k, last):
+    b = k.b
+    keep = max(i for i, e in enumerate(k.ent) if e[0] <= last) + 1
+    pages = -(-keep // k.per)
+    info_n = keep
+    struct.pack_into('<H', b, 16, info_n)
+    for i in range(keep, k.n):  # 남는 항목 자리는 0으로 (INFO 크기는 유지)
+        b[0x1c + 6 * i:0x1c + 6 * i + 6] = b'\0' * 6
+    img = k.img
+    size = 16 + pages * k.psize
+    struct.pack_into('<I', b, img + 4, size)
+    out = b[:img + size]
+    struct.pack_into('<I', out, 4, len(out))
+    return out
 
 def put(k, i, im):
     pg, c = divmod(i, k.per)

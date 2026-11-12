@@ -218,6 +218,28 @@ NAME_SYL = '''가 강 개 건 결 경 고 광 구 국 군 권 귀 규 근 기 �
 에 여 연 영 예 오 온 와 완 용 우 욱 운 웅 원 위 유 윤 은 의 이 인 일 자 장 재 전 정 제 조 종 주 준 쥬 즈 지 진 찬 창 채 천 철 초 츠 치 칠
 카 케 코 쿄 쿠 큐 키 타 태 테 토 파 포 피 하 한 해 현 형 혜 호 홍 화 환 효 후 훈 희 히'''
 
+def check_trimmed_glyphs(P, report):
+    """sysfont18 은 한글 마지막 슬롯 뒤를 잘랐다. 표 문자열에 그 뒤 코드가 남으면 안 된다."""
+    last = max(kenc.cmap().values()); bad = set()
+    def scan(bs):
+        i = 0
+        while i < len(bs):
+            c = bs[i]
+            if (0x81 <= c <= 0x9f or 0xe0 <= c <= 0xfc) and i + 1 < len(bs):
+                code = (c << 8) | bs[i + 1]
+                if code > last: bad.add(code)
+                i += 2
+            else: i += 1
+    for k, v in P.items():
+        if k.startswith('app_init.pak/table/'):
+            t = CSVB(v)
+            for r, c, s in t.strings():
+                if (os.path.basename(k), c) in SKIP: continue
+                scan(s)
+    if bad:
+        raise SystemExit('trimmed glyph used: ' + ' '.join('%04X' % x for x in sorted(bad)[:40]))
+    report.append('glyph trim check ok')
+
 def main(out=OUT):
     report = []
     P = {}
@@ -230,6 +252,7 @@ def main(out=OUT):
     import imgko
     ip = imgko.patches(); P.update(ip); report.append(f'images: {len(ip)} gims')
     eb = build_eboot(report)
+    check_trimmed_glyphs(P, report)
     import sign
     repack.build(ORIG, out, P, eboot=sign.sign(eb))
     print('\n'.join(report[-40:]))
