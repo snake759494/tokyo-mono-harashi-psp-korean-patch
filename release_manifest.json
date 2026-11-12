@@ -1,11 +1,11 @@
 {
- "version": "v1.1",
- "asset": "TokyoMonoHarashi_KO_v1.1.xdelta",
- "asset_size": 7657429,
- "asset_sha256": "7e38c887a0791547936e1f3b735d733ef1e348beec7b7aff367a423115ee3fd6",
+ "version": "v1.2",
+ "asset": "TokyoMonoHarashi_KO_v1.2.xdelta",
+ "asset_size": 6996153,
+ "asset_sha256": "20e59927cffc5f6757c6dad9b678ce8e4edfdaca00ac1965104c3540497f98bb",
  "source_iso_size": 968622080,
  "source_iso_md5": "f4b2213627197cb5f9c97c2d202f0257",
  "source_iso_sha256": "5e27d6f405708e21b7c81c9219bf068acb16b530992ab59ee6463c3c3e6441a2",
  "result_iso_size": 968712192,
- "result_iso_sha256": "06a219d7666978b3dfcee433ba646a085e7d7254508786107401d71cd3862a94"
+ "result_iso_sha256": "fc0d0666b599312813702689d697e4c829dfe6feb2f9fb0c525efa7e5a0498a8"
 }

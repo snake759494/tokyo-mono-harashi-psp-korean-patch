@@ -102,6 +102,12 @@ def build_scripts(P, report):
                 if i: out += b'wc' + nm
                 else: out += nm
                 out += b'r'.join(enc_script(c) for c in pg)
+            # 시험 직후 장면(ms00_03): 이치루 대사의 px(화자별 호칭)를 그대로 두면 한국어판은
+            # 오프닝 동영상으로 못 넘어가고 시험 던전으로 돌아간다(글꼴만 줄인 판 3/3 실패,
+            # 아래 치환까지 한 판 3/3 성공). 게임 시작 직후라 이 시점 이치루의 호칭은 항상
+            # 'pn군'(성+군)이므로 같은 결과가 나오는 토큰으로 바꿔 둔다.
+            if os.path.basename(p).startswith('ms00_03.pwx') and name == 'いちる':
+                out = out.replace(b'px', b'pn' + kenc.enc('군'))
             rep[s] = (e, out)
         rel = os.path.relpath(p, ROOT + '/work/pak').replace(os.sep, '/').replace('.zdv', '')
         P[rel] = pwx.rebuild(b, rep)
@@ -236,6 +242,8 @@ def check_trimmed_glyphs(P, report):
             for r, c, s in t.strings():
                 if (os.path.basename(k), c) in SKIP: continue
                 scan(s)
+        elif k.endswith('.pwx'):  # 대사 글꼴(advfont14)도 잘랐으므로 대사도 검사
+            for s, e, t in pwx.messages(v): scan(t)
     if bad:
         raise SystemExit('trimmed glyph used: ' + ' '.join('%04X' % x for x in sorted(bad)[:40]))
     report.append('glyph trim check ok')
