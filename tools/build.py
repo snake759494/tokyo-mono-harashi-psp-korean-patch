@@ -66,10 +66,100 @@ def enc_script(s):
     s = s.replace('.', '。').replace(',', '、').replace(' ', ' ')
     return kenc.enc(s)
 
+# ---------------------------------------------------------------- speakers
+# 대사의 【화자】 이름은 0x1e4540 이 실행 파일의 화자 표(seg1+0x13f48, 48명 x 10칸 포인터)와
+# 바이트 단위로 똑같은지 비교해 화자 번호를 얻는다. 못 찾으면 -1 이 되고, 그 대사에 px(화자별
+# 주인공 호칭)가 있으면 0x7ffe 번째 캐릭터 기록을 읽어 끝없는 문자열을 이어 붙이다가 메모리
+# 밖에 써서 멈춘다(1화 점심시간 「부드러운 여학생 목소리」, GitHub 이슈 #1).
+# 그래서 대본 화자 이름과 화자 표 문자열을 같은 인코딩·같은 글자로 맞춘다.
+SPK_TABLE = 0x2c3b00 + 0x13f48
+_SPK = None
+
+def speaker_sync():
+    """returns (eboot text overrides {id: ko}, pointer patches {file_off: vaddr},
+    label overrides {jp: ko}, ids encoded like script text, report lines)"""
+    global _SPK
+    if _SPK is not None: return _SPK
+    eb = open(ROOT + '/work/iso/EBOOT.dec', 'rb').read()
+    rd = lambda v: struct.unpack_from('<I', eb, v + 0xc0)[0]
+    cstr = lambda v: eb[v + 0xc0:eb.index(b'\0', v + 0xc0)]
+    metas = json.load(open(ROOT + '/work/trans/src/eboot.json', encoding='utf8'))
+    by_off = {x['off']: x for x in metas}
+    ko = ko_for('eboot'); names = read_pairs(f'{KO}/names.txt')
+    over, ptr, label, ids, rep, put = {}, {}, {}, set(), [], {}
+    rows = []  # [(slot_vaddr, string_vaddr, jp_bytes)]
+    for c in range(0x30):
+        rows.append([(SPK_TABLE + c * 0x28 + 4 * k, rd(SPK_TABLE + c * 0x28 + 4 * k)) for k in range(10)])
+        rows[-1] = [(s, p, cstr(p)) for s, p in rows[-1]]
+    for c in rows:
+        for s, p, j in c:
+            m = by_off.get(p + 0xc0)
+            if m: ids.add(m['id'])
+    def kob(p, j):  # bytes the built EBOOT will hold at string p
+        m = by_off.get(p + 0xc0)
+        if m and m['id'] in over: return kenc.enc(over[m['id']])
+        if m and m['id'] in ko: return kenc.enc(ko[m['id']].replace(BS_N, ''))
+        return j
+    for J, L in names.items():
+        try: jb = J.encode('cp932')
+        except UnicodeEncodeError: continue
+        hit = [c for c in rows if any(j == jb for _, _, j in c)]
+        if not hit: continue
+        Lb = kenc.enc(L)
+        if any(kob(p, j) == Lb for c in hit for _, p, j in c): continue
+        s, p, _ = next(x for c in hit for x in c if x[2] == jb)
+        m = by_off.get(p + 0xc0)
+        if m and len(Lb) <= m['maxbytes']:
+            over[m['id']] = L; rep.append(f'speaker eboot {m["id"]} {J} -> {L}'); continue
+        a = spk_alloc(len(Lb) + 1, ids, over)
+        if a is not None:  # 다른 문자열이 번역으로 짧아져 남은 빈자리에 새로 놓고 칸을 돌린다
+            ptr[s] = a - 0xc0; put[a] = Lb + b'\0'
+            rep.append(f'speaker moved {J} -> {L} @{a:x}'); continue
+        label[J] = ko.get(m['id'], J) if m else J
+        rep.append(f'speaker label {J}: {L} -> {label[J]}')
+    _SPK = (over, ptr, label, ids, rep, put)
+    return _SPK
+
+_POOL = None
+def spk_alloc(n, ids, over):
+    """빈자리 할당: 번역이 원문보다 짧아 남은 문자열 꼬리(0으로 채워짐) 중 코드·데이터가
+    가리키지 않는 곳만 쓴다. 반환값은 파일 오프셋."""
+    global _POOL
+    if _POOL is None:
+        eb = open(ROOT + '/work/iso/EBOOT.dec', 'rb').read()
+        refs = set()
+        words = struct.unpack_from('<%dI' % ((len(eb) - 0xc0) // 4), eb, 0xc0)
+        refs.update(words)
+        for i, w in enumerate(words[:0x2a4a90 // 4]):  # lui/addiu 쌍이 만드는 주소
+            if w >> 26 == 0x0f:
+                r = (w >> 16) & 31; hi = (w & 0xffff) << 16
+                for x in words[i + 1:i + 40]:
+                    if (x >> 21) & 31 == r and x >> 26 in (0x09, 0x0d, 0x23, 0x21, 0x25, 0x20, 0x24, 0x28, 0x29, 0x2b):
+                        lo = x & 0xffff
+                        if x >> 26 != 0x0d and lo & 0x8000: lo -= 0x10000
+                        refs.add((hi + lo) & 0xffffffff); break
+        import bisect
+        rs = sorted(v + 0xc0 for v in refs if 0x200000 <= v < 0x300000)
+        ko = ko_for('eboot'); _POOL = []
+        for x in json.load(open(ROOT + '/work/trans/src/eboot.json', encoding='utf8')):
+            if x['id'] not in ko or x['id'] in ids or x['id'] in over: continue
+            try: e = b'\n'.join(kenc.enc(t, space=b' ', ascii_ok=True) for t in ko[x['id']].split(BS_N))
+            except ValueError: continue
+            lo, hi = x['off'] + len(e) + 1, x['off'] + x['maxbytes'] + 1
+            # 꼬리 안(과 바로 뒤)을 가리키는 참조가 있으면 안 쓴다
+            i = bisect.bisect_left(rs, lo)
+            if hi - lo >= 8 and not (i < len(rs) and rs[i] < hi):
+                _POOL.append([lo, hi])
+    for seg in _POOL:
+        if seg[1] - seg[0] >= n:
+            a = seg[0]; seg[0] += n; return a
+    return None
+
 # ---------------------------------------------------------------- script
 def build_scripts(P, report):
     keys = json.load(open(ROOT + '/work/trans/script_keys.json', encoding='utf8'))
     names = read_pairs(f'{KO}/names.txt')
+    names.update(speaker_sync()[2])
     body_ko = {}
     for f in sorted(glob.glob(f'{TXT}/script_*.txt')):
         n = os.path.basename(f)[:-4]
@@ -167,11 +257,16 @@ def build_eboot(report):
     import json as _j
     meta = {x['id']: x for x in _j.load(open(ROOT + '/work/trans/src/eboot.json', encoding='utf8'))}
     n = 0
+    sp_over, sp_ptr, _, sp_ids, sp_rep, sp_put = speaker_sync()
+    ko.update(sp_over); report.extend(sp_rep)
     for k, v in ko.items():
         if k not in meta: continue
         m = meta[k]
         try:
-            e = b'\n'.join(kenc.enc(x, space=b' ', ascii_ok=True) for x in v.split(BS_N))
+            if k in sp_ids:  # 화자 표 문자열은 대본 화자 이름과 같은 바이트여야 한다
+                e = kenc.enc(v.replace(BS_N, ''))
+            else:
+                e = b'\n'.join(kenc.enc(x, space=b' ', ascii_ok=True) for x in v.split(BS_N))
         except ValueError as ex:
             report.append('EBOOT enc ' + str(ex)); continue
         if len(e) > m['maxbytes']:
@@ -179,6 +274,11 @@ def build_eboot(report):
         o = m['off']
         eb[o:o + m['maxbytes'] + 1] = e + b'\0' * (m['maxbytes'] + 1 - len(e))
         n += 1
+    for a, v in sp_put.items():  # 빈자리에 놓은 화자 이름
+        assert not any(eb[a:a + len(v)]), hex(a)
+        eb[a:a + len(v)] = v
+    for s, v in sp_ptr.items():  # 화자 표 칸을 그 문자열로 돌린다
+        struct.pack_into('<I', eb, s + 0xc0, v)
     # name-entry keyboard: replace kana pages with hangul syllables
     syl = sorted(set(NAME_SYL.split()))
     kb = 0x2b1154

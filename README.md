@@ -5,8 +5,8 @@ PSP 일본판 **東京鬼祓師 鴉乃杜學園奇譚 (도쿄 모노하라시 ~�
 ## 적용 방법
 1. 아래 해시와 일치하는 **원본 `.iso`** 를 준비합니다. (CSO·CHD 등으로 변환한 이미지에는 적용할 수 없습니다.)
    - PowerShell: `Get-FileHash -Algorithm MD5 -LiteralPath '.\Tokyo Mono Harashi - Karasu no Mori Gakuen Kitan (Japan).iso'`
-2. xdeltaUI 같은 도구로 원본 `.iso` 에 `TokyoMonoHarashi_KO_v1.2.xdelta` 를 적용합니다. (Patch = xdelta, Source File = 원본 ISO, Output File = 새 파일명)
-   - 명령줄: `xdelta3 -d -s "Tokyo Mono Harashi - Karasu no Mori Gakuen Kitan (Japan).iso" TokyoMonoHarashi_KO_v1.2.xdelta "Tokyo Mono Harashi - Karasu no Mori Gakuen Kitan (Korean).iso"`
+2. xdeltaUI 같은 도구로 원본 `.iso` 에 `TokyoMonoHarashi_KO_v1.3.xdelta` 를 적용합니다. (Patch = xdelta, Source File = 원본 ISO, Output File = 새 파일명)
+   - 명령줄: `xdelta3 -d -s "Tokyo Mono Harashi - Karasu no Mori Gakuen Kitan (Japan).iso" TokyoMonoHarashi_KO_v1.3.xdelta "Tokyo Mono Harashi - Karasu no Mori Gakuen Kitan (Korean).iso"`
 3. 만들어진 ISO를 PPSSPP 또는 커스텀 펌웨어(PSP·PS Vita Adrenaline 등)에서 실행합니다.
 
 | 항목 | 값 |
@@ -14,9 +14,9 @@ PSP 일본판 **東京鬼祓師 鴉乃杜學園奇譚 (도쿄 모노하라시 ~�
 | 원본 ISO 크기 | 968,622,080 바이트 |
 | 원본 ISO MD5 | `f4b2213627197cb5f9c97c2d202f0257` |
 | 원본 ISO SHA-256 | `5e27d6f405708e21b7c81c9219bf068acb16b530992ab59ee6463c3c3e6441a2` |
-| xdelta SHA-256 | `20e59927cffc5f6757c6dad9b678ce8e4edfdaca00ac1965104c3540497f98bb` |
+| xdelta SHA-256 | `21a58229040bb856c6b0b179d78bacfb55de1bf18e3dac3871d4cef31f593986` |
 | 결과 ISO 크기 | 968,712,192 바이트 |
-| 결과 ISO SHA-256 | `fc0d0666b599312813702689d697e4c829dfe6feb2f9fb0c525efa7e5a0498a8` |
+| 결과 ISO SHA-256 | `cb422ac65f02bb3c0f2774ea6c9182fcaa72d4d1ea34219ee4af09d974e715ae` |
 
 ## 주의
 - 수정한 실행 파일을 다시 서명해 EBOOT로 넣었기 때문에 **PPSSPP·커스텀 펌웨어 전용**입니다. 정품 펌웨어에서는 부팅되지 않습니다.
@@ -38,7 +38,7 @@ PSP 일본판 **東京鬼祓師 鴉乃杜學園奇譚 (도쿄 모노하라시 ~�
 - 음성, 화찰 그림 속 붓글씨, 아주 작은 아이템 아이콘·의상·부적 문양, 배경 속 작은 간판 글씨, 내부 ID로만 쓰이는 층 이름, 개발용 자리표시 이미지
 
 ## 검증 범위
-PPSSPP에서 타이틀, 고지문, 프롤로그 대사, 설문지·이름 입력 키보드, 감정 선택 원판, 선택지, 휴대폰 메뉴·Q&A·프로필, 첫 던전 화면·커맨드 팔레트·아이템 메뉴를 실제 플레이로 확인했습니다. 대본·표·실행 파일 문자열은 번역 누락을 전수 검사했습니다. v1.2에서는 시험 직후 장면(이치루·이사지 대화)부터 오프닝 동영상 뒤 「다음 화로」 막간 메뉴까지 PPSSPP에서 6번 반복 실행해 모두 정상으로 넘어가는 것을 확인했고, 휴대폰 Q&A의 그림 있는 도움말 4종을 끝까지 스크롤해 마지막 줄이 보이는 것을 확인했습니다. 전투·상점·세이브 화면과 2장 이후는 실제 플레이로 확인하지 않았습니다. 문제를 발견하면 Issues에 알려 주세요.
+PPSSPP에서 타이틀, 고지문, 프롤로그 대사, 설문지·이름 입력 키보드, 감정 선택 원판, 선택지, 휴대폰 메뉴·Q&A·프로필, 첫 던전 화면·커맨드 팔레트·아이템 메뉴를 실제 플레이로 확인했습니다. 대본·표·실행 파일 문자열은 번역 누락을 전수 검사했습니다. v1.2에서는 시험 직후 장면(이치루·이사지 대화)부터 오프닝 동영상 뒤 「다음 화로」 막간 메뉴까지 PPSSPP에서 6번 반복 실행해 모두 정상으로 넘어가는 것을 확인했고, v1.3에서는 1화 담임교사와 만난 뒤 점심시간 장면부터 1화 끝 스테이터스 화면까지 PPSSPP에서 진행되는 것을 확인했으며, 휴대폰 Q&A의 그림 있는 도움말 4종을 끝까지 스크롤해 마지막 줄이 보이는 것을 확인했습니다. 전투·상점·세이브 화면과 2장 이후는 실제 플레이로 확인하지 않았습니다. 문제를 발견하면 Issues에 알려 주세요.
 
 ## 문서
 - [CHANGELOG.md](CHANGELOG.md) — 변경 기록
