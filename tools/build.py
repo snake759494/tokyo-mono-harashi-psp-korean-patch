@@ -98,7 +98,9 @@ def speaker_sync():
     def kob(p, j):  # bytes the built EBOOT will hold at string p
         m = by_off.get(p + 0xc0)
         if m and m['id'] in over: return kenc.enc(over[m['id']])
-        if m and m['id'] in ko: return kenc.enc(ko[m['id']].replace(BS_N, ''))
+        if m and m['id'] in ko:
+            e = kenc.enc(ko[m['id']].replace(BS_N, ''))
+            if len(e) <= m['maxbytes']: return e  # 넘치면 build_eboot 가 쓰지 않고 원문이 남는다
         return j
     for J, L in names.items():
         try: jb = J.encode('cp932')
@@ -115,7 +117,14 @@ def speaker_sync():
         if a is not None:  # 다른 문자열이 번역으로 짧아져 남은 빈자리에 새로 놓고 칸을 돌린다
             ptr[s] = a - 0xc0; put[a] = Lb + b'\0'
             rep.append(f'speaker moved {J} -> {L} @{a:x}'); continue
-        label[J] = ko.get(m['id'], J) if m else J
+        # 자리가 없으면 띄어쓰기를 뺀 이름을 표와 대본 양쪽에 같이 쓴다(전각 공백 2바이트가 넘쳤다)
+        if m:
+            for c in (L, ko.get(m['id'], L)):
+                c = c.replace(' ', '')
+                if len(kenc.enc(c)) <= m['maxbytes']: break
+            else: raise SystemExit(f'speaker {J}: no fitting label')
+            over[m['id']] = label[J] = c
+        else: label[J] = J
         rep.append(f'speaker label {J}: {L} -> {label[J]}')
     _SPK = (over, ptr, label, ids, rep, put)
     return _SPK
@@ -324,6 +333,36 @@ NAME_SYL = '''가 강 개 건 결 경 고 광 구 국 군 권 귀 규 근 기 �
 에 여 연 영 예 오 온 와 완 용 우 욱 운 웅 원 위 유 윤 은 의 이 인 일 자 장 재 전 정 제 조 종 주 준 쥬 즈 지 진 찬 창 채 천 철 초 츠 치 칠
 카 케 코 쿄 쿠 큐 키 타 태 테 토 파 포 피 하 한 해 현 형 혜 호 홍 화 환 효 후 훈 희 히'''
 
+def speaker_verify(P, eb, report):
+    """게임은 【】 화자 이름을 실행 파일 화자 표(0x30행×10칸)와 바이트 단위로 같은지 비교해 화자 번호를 정하고,
+    못 찾으면(-1) px 호칭을 펼치다 메모리를 망가뜨린다(1화 파란 화면, 다음 장면 대신 시험 던전으로 돌아감).
+    원판에서 찾히는 화자는 한국어판에서도 같은 행으로 찾혀야 한다."""
+    def table(b):
+        rd = lambda v: struct.unpack_from('<I', b, v + 0xc0)[0]
+        cs = lambda v: bytes(b[v + 0xc0:b.index(b'\0', v + 0xc0)])
+        return [[cs(rd(SPK_TABLE + c * 0x28 + 4 * k)) for k in range(10)] for c in range(0x30)]
+    def look(T, l):
+        return next((c for c, row in enumerate(T) if l in row), -1)
+    def labels(b, lo, hi):
+        for s, e, t in pwx.messages(b):
+            if t.startswith(lo): yield t[len(lo):t.find(hi, len(lo))], b'px' in t
+    TJ = table(open(ROOT + '/work/iso/EBOOT.dec', 'rb').read()); TK = table(eb)
+    jid = {}; bad = []; diff = 0
+    for p in pw_files():
+        rel = os.path.relpath(p, ROOT + '/work/pak').replace(os.sep, '/').replace('.zdv', '')
+        for l, _ in labels(load(p), '【'.encode('cp932'), '】'.encode('cp932')):
+            jid.setdefault(l.decode('cp932'), look(TJ, l))
+        for l, x in labels(P[rel], kenc.enc('【'), kenc.enc('】')):
+            if len(l) > 28: bad.append(f'{rel} label >28 bytes')
+    names = read_pairs(f'{KO}/names.txt'); names.update(speaker_sync()[2])
+    for j, a in jid.items():
+        b = look(TK, kenc.enc(names.get(j, j)))
+        # 隠人(오니): 오니마루 행의 '오니'와 겹치지만 이 화자는 짐승 울음뿐이라 px 가 없다
+        if a >= 0 and b != a and j != '隠人': bad.append(f'{j} -> {names.get(j)}: row {a} vs {b}')
+        elif a != b: diff += 1
+    report.append(f'speaker verify: {len(jid)} labels, {diff} ruby/unknown labels now resolve')
+    if bad: raise SystemExit('speaker verify failed:\n' + '\n'.join(bad))
+
 def check_trimmed_glyphs(P, report):
     """sysfont18 은 한글 마지막 슬롯 뒤를 잘랐다. 표 문자열에 그 뒤 코드가 남으면 안 된다."""
     last = max(kenc.cmap().values()); bad = set()
@@ -361,8 +400,10 @@ def main(out=OUT):
     ip = imgko.patches(); P.update(ip); report.append(f'images: {len(ip)} gims')
     eb = build_eboot(report)
     check_trimmed_glyphs(P, report)
+    speaker_verify(P, eb, report)
     import sign
     repack.build(ORIG, out, P, eboot=sign.sign(eb))
+    sys.stdout.reconfigure(errors='replace')  # cp949 콘솔에서 보고 출력이 죽지 않게
     print('\n'.join(report[-40:]))
 
 if __name__ == '__main__':

@@ -1,8 +1,14 @@
 """Use PPSSPP's documented WebSocket debugger for patch runtime tests."""
-import websocket,json,uuid,sys,base64
+import websocket,json,uuid,sys,base64,os
 from pathlib import Path
 class Debugger:
- def __init__(self):self.w=websocket.create_connection('ws://127.0.0.1:49742/debugger',subprotocols=['debugger.ppsspp.org'],timeout=15)
+ def __init__(self):
+  self.w=websocket.create_connection('ws://127.0.0.1:%s/debugger'%os.environ.get('PPSSPP_PORT','49742'),subprotocols=['debugger.ppsspp.org'],timeout=15)
+  # PPSSPP_EXPECT 가 있으면 그 게임이 아닐 때 입력을 보내지 않는다(같은 PC의 다른 에뮬레이터 보호)
+  exp=os.environ.get('PPSSPP_EXPECT')
+  if exp:
+   g=(self.call('game.status').get('game') or {}).get('id')
+   if g!=exp:self.w.close();raise SystemExit(f'PPSSPP game {g} != {exp}; refusing to send input')
  def call(self,event,**args):
   ticket=str(uuid.uuid4());self.w.send(json.dumps(dict(event=event,ticket=ticket,**args)))
   while True:
